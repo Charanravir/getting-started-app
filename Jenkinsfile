@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = "charanravir/todoapp" // Docker image name
+        DOCKER_IMAGE = "charanravir/todoapp"  // Docker image name
         DOCKER_CREDENTIALS_ID = "dockeruser" // Credentials ID for Docker Hub
     }
 
@@ -10,17 +10,16 @@ pipeline {
         stage('Git Checkout') {
             steps {
                 echo "Checking out the repository..."
-                 git branch: 'main', url: 'https://github.com/Charanravir/getting-started-app.git'
+                git branch: 'main', url: 'https://github.com/Charanravir/getting-started-app.git'
             }
         }
-        
+
         stage('Image Build') {
             steps {
                 echo "Building the Docker image..."
-                sh """
-                docker image build -t ${DOCKER_IMAGE}:v${BUILD_ID} .
-                docker image tag ${DOCKER_IMAGE}:v${BUILD_ID} ${DOCKER_IMAGE}:latest
-                """
+                script {
+                    dockerImage = docker.build("${DOCKER_IMAGE}:${BUILD_ID}")
+                }
             }
         }
 
@@ -28,10 +27,10 @@ pipeline {
             steps {
                 echo "Pushing Docker image to Docker Hub..."
                 withDockerRegistry([credentialsId: "${DOCKER_CREDENTIALS_ID}", url: 'https://index.docker.io/v1/']) {
-                    sh """
-                    docker push ${DOCKER_IMAGE}:v${BUILD_ID}
-                    docker push ${DOCKER_IMAGE}:latest
-                    """
+                    script {
+                        dockerImage.push("${BUILD_ID}")
+                        dockerImage.push("latest")
+                    }
                 }
             }
         }
@@ -39,19 +38,23 @@ pipeline {
         stage('Cleanup Existing Container') {
             steps {
                 echo "Stopping and removing any existing container..."
-                sh """
-                docker stop todoapp || true
-                docker rm todoapp || true
-                """
+                script {
+                    // Remove any existing containers from previous runs
+                    def existingContainer = docker.container('todoapp')
+                    if (existingContainer) {
+                        existingContainer.stop()
+                        existingContainer.remove()
+                    }
+                }
             }
         }
 
         stage('Run Container') {
             steps {
                 echo "Running the Docker container..."
-                sh """
-                docker run -itd --name todoapp -p 3000:3000 ${DOCKER_IMAGE}:latest
-                """
+                script {
+                    docker.run("-d --name todoapp -p 3000:3000 ${DOCKER_IMAGE}:${BUILD_ID}")
+                }
             }
         }
     }
