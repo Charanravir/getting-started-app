@@ -15,6 +15,7 @@ pipeline{
                 sh 'docker image tag charanravir/todoapp:v$BUILD_ID charanravir/todoapp:latest'
             }
         }
+
         
         stage("container creation"){
             steps{
