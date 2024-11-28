@@ -16,7 +16,6 @@ pipeline{
             }
         }
 
-        
         stage("container creation"){
             steps{
                 sh 'docker run -itd --name todoapp -p 3000:3000 charanravir/todoapp:latest'
