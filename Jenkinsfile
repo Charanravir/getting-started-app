@@ -36,18 +36,16 @@ pipeline {
         }
 
         stage('Cleanup Existing Container') {
-            steps {
-                echo "Stopping and removing any existing container..."
-                script {
-                    // Remove any existing containers from previous runs
-                    def existingContainer = docker.container('todoapp')
-                    if (existingContainer) {
-                        existingContainer.stop()
-                        existingContainer.remove()
-                    }
-                }
-            }
+    steps {
+        echo 'Stopping and removing any existing container...'
+        script {
+            sh '''
+            docker ps -q --filter "name=your-container-name" | grep -q . && docker stop your-container-name && docker rm your-container-name || echo "No containers to stop"
+            '''
         }
+    }
+}
+
 
         stage('Run Container') {
             steps {
