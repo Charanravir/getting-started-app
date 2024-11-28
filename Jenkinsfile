@@ -1,72 +1,71 @@
 pipeline {
     agent any
-
     environment {
-        DOCKER_IMAGE = "charanravir/todoapp"  // Docker image name
-        DOCKER_CREDENTIALS_ID = "dockeruser" // Credentials ID for Docker Hub
+        DOCKER_IMAGE = "charanravir/todoapp"
+        DOCKER_TAG = "21"
+        DOCKER_LATEST_TAG = "latest"
+        CONTAINER_NAME = "todoapp"
+        PORT_MAPPING = "3000:3000"
     }
-
     stages {
-        stage('Git Checkout') {
+        stage('Checkout Code') {
             steps {
-                echo "Checking out the repository..."
-                git branch: 'main', url: 'https://github.com/Charanravir/getting-started-app.git'
+                echo 'Checking out the repository...'
+                checkout scm
             }
         }
-
-        stage('Image Build') {
+        stage('Build Docker Image') {
             steps {
-                echo "Building the Docker image..."
-                script {
-                    dockerImage = docker.build("${DOCKER_IMAGE}:${BUILD_ID}")
-                }
+                echo 'Building the Docker image...'
+                sh """
+                    docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
+                """
             }
         }
-
         stage('Push to Docker Hub') {
             steps {
-                echo "Pushing Docker image to Docker Hub..."
-                withDockerRegistry([credentialsId: "${DOCKER_CREDENTIALS_ID}", url: 'https://index.docker.io/v1/']) {
-                    script {
-                        dockerImage.push("${BUILD_ID}")
-                        dockerImage.push("latest")
-                    }
+                echo 'Pushing Docker image to Docker Hub...'
+                withDockerRegistry([url: '', credentialsId: 'docker-hub-credentials']) {
+                    sh """
+                        docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
+                        docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:${DOCKER_LATEST_TAG}
+                        docker push ${DOCKER_IMAGE}:${DOCKER_LATEST_TAG}
+                    """
                 }
             }
         }
-
         stage('Cleanup Existing Container') {
-    steps {
-        echo 'Stopping and removing any existing container...'
-        script {
-            sh '''
-            docker ps -q --filter "name=your-container-name" | grep -q . && docker stop your-container-name && docker rm your-container-name || echo "No containers to stop"
-            '''
-        }
-    }
-}
-
-
-        stage('Run Container') {
             steps {
-                echo "Running the Docker container..."
-                script {
-                    docker.run("-d --name todoapp -p 3000:3000 ${DOCKER_IMAGE}:${BUILD_ID}")
-                }
+                echo 'Stopping and removing any existing container...'
+                sh """
+                    if docker ps -q --filter name=${CONTAINER_NAME}; then
+                        docker stop ${CONTAINER_NAME}
+                        docker rm ${CONTAINER_NAME}
+                    else
+                        echo "No containers to stop"
+                    fi
+                """
+            }
+        }
+        stage('Run Docker Container') {
+            steps {
+                echo 'Running the Docker container...'
+                sh """
+                    docker run -d --name ${CONTAINER_NAME} -p ${PORT_MAPPING} ${DOCKER_IMAGE}:${DOCKER_TAG}
+                """
             }
         }
     }
-
     post {
+        always {
+            echo 'Cleaning up unused Docker images...'
+            sh 'docker image prune -f'
+        }
         success {
-            echo "Pipeline completed successfully. The container is running, and the image has been pushed to Docker Hub."
+            echo 'Pipeline executed successfully!'
         }
         failure {
-            echo "Pipeline failed. Check the logs for details."
-        }
-        always {
-            echo "Cleaning up unused Docker images..."
-            sh "docker image prune -f" // Removes unused Docker images to free up space
+            echo 'Pipeline failed. Check the logs for details.'
         }
     }
 }
