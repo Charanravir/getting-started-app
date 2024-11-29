@@ -1,71 +1,93 @@
 pipeline {
     agent any
+
     environment {
         DOCKER_IMAGE = "charanravir/todoapp"
-        DOCKER_TAG = "21"
-        DOCKER_LATEST_TAG = "latest"
-        CONTAINER_NAME = "todoapp"
-        PORT_MAPPING = "3000:3000"
+        DOCKER_CREDENTIALS_ID = "dockeruser"
+        SSH_CREDENTIALS_ID = "ssh_key"
+        SERVER_2_USER = "ubuntu"
+        SERVER_2_IP = "172.31.6.89"
     }
     stages {
-        stage('Checkout Code') {
+        stage('Git Checkout') {
             steps {
-                echo 'Checking out the repository...'
-                checkout scm
+                echo "Checking out the repository..."
+                git branch: 'main', url: 'https://github.com/charanravir/getting-started-app.git'
             }
         }
-        stage('Build Docker Image') {
+
+        stage('Image Build') {
             steps {
-                echo 'Building the Docker image...'
-                sh """
-                    docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
-                """
-            }
-        }
-        stage('Push to Docker Hub') {
-            steps {
-                echo 'Pushing Docker image to Docker Hub...'
-                withDockerRegistry([url: '', credentialsId: 'docker-hub-credentials']) {
+                echo "Building the Docker image..."
+                script {
                     sh """
-                        docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
-                        docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:${DOCKER_LATEST_TAG}
-                        docker push ${DOCKER_IMAGE}:${DOCKER_LATEST_TAG}
+                    docker image build -t ${DOCKER_IMAGE}:v${BUILD_ID} . 
+                    docker image tag ${DOCKER_IMAGE}:v${BUILD_ID} ${DOCKER_IMAGE}:latest
                     """
                 }
             }
         }
-        stage('Cleanup Existing Container') {
+
+        stage('Push to Docker Hub') {
             steps {
-                echo 'Stopping and removing any existing container...'
+                echo "Pushing Docker image to Docker Hub..."
+                withDockerRegistry([credentialsId: "${DOCKER_CREDENTIALS_ID}", url: 'https://index.docker.io/v1/']) {
+                    sh """
+                    docker push ${DOCKER_IMAGE}:v${BUILD_ID}
+                    docker push ${DOCKER_IMAGE}:latest
+                    """
+                }
+            }
+        }
+
+        stage('Cleanup Existing Container on Server 1') {
+            steps {
+                echo "Stopping and removing any existing container on Server 1..."
                 sh """
-                    if docker ps -q --filter name=${CONTAINER_NAME}; then
-                        docker stop ${CONTAINER_NAME}
-                        docker rm ${CONTAINER_NAME}
-                    else
-                        echo "No containers to stop"
-                    fi
+                docker stop todoapp || true
+                docker rm todoapp || true
                 """
             }
         }
-        stage('Run Docker Container') {
+
+        stage('Run Container on Server 1') {
             steps {
-                echo 'Running the Docker container...'
+                echo "Running the Docker container on Server 1..."
                 sh """
-                    docker run -d --name ${CONTAINER_NAME} -p ${PORT_MAPPING} ${DOCKER_IMAGE}:${DOCKER_TAG}
+                docker run -itd --name todoapp -p 3000:3000 ${DOCKER_IMAGE}:latest
                 """
+            }
+        }
+
+        stage('Deploy to Server 2') {
+            steps {
+                echo "Deploying the Docker image to Server 2..."
+
+                // Use SSH credentials to connect to Server 2 and deploy the container
+                sshagent([SSH_CREDENTIALS_ID]) {
+                    sh """
+                    ssh -o StrictHostKeyChecking=no ${SERVER_2_USER}@${SERVER_2_IP} '
+                        docker pull ${DOCKER_IMAGE}:latest && 
+                        docker stop todoapp || true &&
+                        docker rm todoapp || true &&
+                        docker run -d --name todoapp -p 3000:3000 ${DOCKER_IMAGE}:latest
+                    '
+                    """
+                }
             }
         }
     }
+
     post {
-        always {
-            echo 'Cleaning up unused Docker images...'
-            sh 'docker image prune -f'
-        }
         success {
-            echo 'Pipeline executed successfully!'
+            echo "Pipeline completed successfully. The container is running, and the image has been pushed to Docker Hub."
         }
         failure {
-            echo 'Pipeline failed. Check the logs for details.'
+            echo "Pipeline failed. Check the logs for details."
+        }
+        always {
+            echo "Cleaning up unused Docker images..."
+            sh "docker image prune -f"
         }
     }
 }
