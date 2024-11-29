@@ -12,14 +12,14 @@ pipeline {
     stages {
         stage('Checkout Code') {
             steps {
-                echo "Checking out the repository..."
+                echo "Checking out the repo"
                 git branch: 'main', url: 'https://github.com/charanravir/getting-started-app.git'
             }
         }
 
         stage('Build and Push Docker Image') {
             steps {
-                echo "Building and pushing the Docker image..."
+                echo "Building and pushing the Docker image"
                 withDockerRegistry([credentialsId: "${DOCKER_CREDENTIALS_ID}", url: 'https://index.docker.io/v1/']) {
                     sh '''
                     docker build -t ${DOCKER_IMAGE}:v${BUILD_ID} .
@@ -33,7 +33,7 @@ pipeline {
 
         stage('Deploy to Server 2') {
             steps {
-                echo "Deploying to Server 2..."
+                echo "Deploying container in server-2"
                 sshagent([SSH_CREDENTIALS_ID]) {
                     sh '''
                     ssh -o StrictHostKeyChecking=no ${SERVER_2_USER}@${SERVER_2_IP} "
