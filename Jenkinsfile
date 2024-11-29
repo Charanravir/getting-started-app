@@ -48,16 +48,5 @@ pipeline {
         }
     }
 
-    post {
-        success {
-            echo "Pipeline completed successfully. The container is deployed."
-        }
-        failure {
-            echo "Pipeline failed. Check the logs for details."
-        }
-        always {
-            echo "Cleaning up local Docker images..."
-            sh "docker image prune -f"
-        }
-    }
+   
 }
