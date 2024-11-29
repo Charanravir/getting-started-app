@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = "charanravir/todoapp"
         DOCKER_CREDENTIALS_ID = "dockeruser"
+        DOCKER_IMAGE = "charanravir/todoapp"
         SSH_CREDENTIALS_ID = "ssh_key"
         SERVER_2_USER = "ubuntu"
         SERVER_2_IP = "172.31.6.89"
